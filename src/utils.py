@@ -26,9 +26,9 @@ class AttentionHead(nn.Module):
     def __init__(self, d_model: int, d_k: int, d_q: int, d_v: int):
         super(AttentionHead, self).__init__()
 
-        self.wq = None
-        self.wk = None
-        self.wv = None
+        self.wq = nn.Linear(d_model, d_q)
+        self.wk = nn.Linear(d_model, d_k)
+        self.wv = nn.Linear(d_model, d_v)
 
     def scaled_dot_product_attention(self, q, k, v, mask=None):
         """Calculate the attention weights with optional causal mask.
@@ -44,23 +44,24 @@ class AttentionHead(nn.Module):
             Tensor: Attention weights.
         """
 
-        # The dimension of the key tensor, used to scale the scores.
-        dim_k = None
+       # The dimension of the key tensor, used to scale the scores.
+        dim_k = int(k.shape[-1])
 
         # Calculate the dot product between query and the transpose of key.
         # The result is then scaled by the square root of dim_k.
-        scores = None
-
+        scores = (q.matmul(k.transpose(1, 2)))/math.sqrt(dim_k)
+        
+        # Masked scores
         if mask is not None:
-            # Apply the causal mask by setting the masked positions to a very large negative value.
-            scores = None
+            # Mask positions where mask == 0 (causal mask convention)
+            scores = scores.masked_fill(mask == 0, value=float('-inf'))
 
         # Apply the softmax function to obtain the attention weights.
-        weights = None
+        weights = F.softmax(scores, 2)
 
         # Compute the output by performing a weighted sum of the value tensor
         # using the attention weights.
-        output = None
+        output = weights.matmul(v)
 
         return output, weights
 
@@ -77,11 +78,11 @@ class AttentionHead(nn.Module):
             Tensor: Output tensor of shape (batch_size, seq_len, d_v).
         """
         # Project input tensor to query, key, and value tensors.
-        q = None
-        k = None
-        v = None
+        q = self.wq(x_q)
+        k = self.wk(x_k)
+        v = self.wv(x_v)
 
-        output, _ = None
+        output, _ = self.scaled_dot_product_attention(q, k, v, mask)
 
         return output
 
@@ -104,11 +105,13 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, d_model: int, num_attention_heads: int):
         super(MultiHeadAttention, self).__init__()
         assert d_model % num_attention_heads == 0, "d_model must be divisible by num_attention_heads"
-        d_v = None
-        d_k = None
-
-        self.heads = None
-        self.output_linear = None
+        
+        # Define the heads and linear layer
+        self.heads = nn.ModuleList([AttentionHead(d_model, 
+                                            int(d_model/num_attention_heads), 
+                                            int(d_model/num_attention_heads), 
+                                            int(d_model/num_attention_heads),) for _ in range(num_attention_heads)])
+        self.output_linear = nn.Linear(d_model, d_model)
 
     def forward(self, x_q, x_k, x_v, mask=None):
         """Forward pass for the multi-head attention layer with optional causal mask.
@@ -122,15 +125,12 @@ class MultiHeadAttention(nn.Module):
         Returns:
             Tensor: Output tensor of shape (batch_size, seq_len, d_model).
         """
-        # Concatenate the outputs from all attention heads.
-        x = None
-
-        # Apply the linear layer 
-        x = None
+        # Implement the forward pass for the multi-head attention layer, now with masking.
+        x = self.output_linear(torch.concat([attention_head.forward(x_q, x_k, x_v, mask) for attention_head in self.heads], 2))
         return x
     
 class FeedForward(nn.Module):
-    """FeedForward module for the Transformer Decoder.
+    """FeedForward module for the Transformer.
 
     This class implements the feed-forward network used in the Transformer
     model. It consists of two linear layers with a GELU activation in between.
@@ -140,8 +140,8 @@ class FeedForward(nn.Module):
         intermediate_size (int): The dimension of the intermediate layer.
 
     Attributes:
-        linear_1 (nn.Linear): First linear layer that projects from d_model to intermediate_size.
-        linear_2 (nn.Linear): Second linear layer that projects from intermediate_size back to d_model.
+        linear_1 (nn.Linear): The first linear layer that projects from d_model to intermediate_size.
+        linear_2 (nn.Linear): The second linear layer that projects from intermediate_size back to d_model.
         gelu (nn.GELU): GELU activation function applied after the first linear layer.
     """
 
@@ -160,9 +160,7 @@ class FeedForward(nn.Module):
         Returns:
             torch.Tensor: Output tensor of shape (batch_size, seq_len, d_model).
         """
-        x = self.linear_1(x)
-        x = self.gelu(x)
-        x = self.linear_2(x)
+        x = self.linear_2(self.gelu(self.linear_1(x)))
         return x
     
 class Embeddings(nn.Module):

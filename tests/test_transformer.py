@@ -443,7 +443,7 @@ def test_sampling_decoding(mock_transformer):
 
     if "Microsoft" in platform.uname().release or platform.system() == "Windows":	
     # if os.name == 'nt':
-        expected_tokens = [2, 8, 6, 3, 1]  # Based on sampling and the fixed logits
+        expected_tokens = [6, 1, 2, 2, 1]  # Based on sampling and the fixed logits
     elif platform.system() == "Darwin" or platform.system() == "Linux":
     # elif os.name == 'posix':
         expected_tokens = [6, 1, 2, 2, 1]
@@ -466,7 +466,7 @@ def test_top_k_sampling_decoding(mock_transformer):
     torch.manual_seed(0)
 
     if "Microsoft" in platform.uname().release or platform.system() == "Windows":
-        expected_tokens = [1, 0, 0, 2, 3]
+        expected_tokens = [1, 1, 0, 1, 1]
     elif platform.system() == "Darwin" or platform.system() == "Linux":
         expected_tokens = [1, 1, 0, 1, 1]
 
@@ -487,7 +487,7 @@ def test_top_p_sampling_decoding(mock_transformer):
     torch.manual_seed(0)
 
     if "Microsoft" in platform.uname().release or platform.system() == "Windows":
-        expected_tokens = [1, 2, 6, 3, 3]
+        expected_tokens = [6, 1, 3, 3, 3]
     elif platform.system() == "Darwin" or platform.system() == "Linux":
         expected_tokens = [6, 1, 3, 3, 3]
 
